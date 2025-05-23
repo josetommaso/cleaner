@@ -30,11 +30,11 @@ async function main() {
   }
 
   switch (option) {
-    case 'wallets':
+    case 'tokens':
       console.log('Starting wallet addresses extraction...');
       await processWallets();
       break;
-    case 'tokens':
+    case 'wallets':
       console.log('Starting tokens option processing...');
       await processTokens();
       break;
@@ -99,24 +99,88 @@ function extractTokenAddresses() {
   return new Promise((resolve, reject) => {
     const tokenAddresses = [];
     
-    fs.createReadStream(csvFilePath)
-      .pipe(parse({
-        columns: true,
-        skip_empty_lines: true
-      }))
-      .on('data', (row) => {
-        if (row.token_address) {
-          // Remove quotes from token address
-          const cleanAddress = row.token_address.replace(/"/g, '');
-          tokenAddresses.push(cleanAddress);
+    // First read the file as text to handle special escape sequences
+    fs.readFile(csvFilePath, 'utf8', (err, data) => {
+      if (err) {
+        return reject(err);
+      }
+      
+      try {
+        // Process the CSV file line by line
+        const lines = data.split('\n');
+        const header = lines[0].split(',');
+        const tokenAddressIndex = header.findIndex(col => col.trim() === 'token_address');
+        
+        if (tokenAddressIndex === -1) {
+          return reject(new Error('token_address column not found in CSV'));
         }
-      })
-      .on('error', (error) => {
-        reject(error);
-      })
-      .on('end', () => {
+        
+        // Process each line (skipping header)
+        for (let i = 1; i < lines.length; i++) {
+          try {
+            const line = lines[i].trim();
+            if (!line) continue;
+            
+            // Parse the line manually to handle special characters
+            let inQuotes = false;
+            let currentField = '';
+            let fieldIndex = 0;
+            
+            for (let j = 0; j < line.length; j++) {
+              const char = line[j];
+              const nextChar = line[j + 1];
+              
+              // Handle escape sequences
+              if (char === '\\' && nextChar === '"') {
+                currentField += '"';
+                j++; // Skip the next character (the quote)
+              }
+              // Start or end of quoted field
+              else if (char === '"') {
+                if (inQuotes && nextChar === '"') {
+                  // Double quotes inside a quoted field = escaped quote
+                  currentField += '"';
+                  j++; // Skip the next quote
+                } else {
+                  // Toggle quote state
+                  inQuotes = !inQuotes;
+                }
+              }
+              // Field separator
+              else if (char === ',' && !inQuotes) {
+                if (fieldIndex === tokenAddressIndex) {
+                  // Remove surrounding quotes if any
+                  const cleanAddress = currentField.replace(/^"(.*)"$/, '$1');
+                  if (cleanAddress) {
+                    tokenAddresses.push(cleanAddress);
+                  }
+                }
+                currentField = '';
+                fieldIndex++;
+              }
+              // Normal character
+              else {
+                currentField += char;
+              }
+            }
+            
+            // Handle the last field
+            if (fieldIndex === tokenAddressIndex) {
+              const cleanAddress = currentField.replace(/^"(.*)"$/, '$1');
+              if (cleanAddress) {
+                tokenAddresses.push(cleanAddress);
+              }
+            }
+          } catch (lineError) {
+            console.warn(`Warning: Could not process line ${i + 1}: ${lineError.message}`);
+          }
+        }
+        
         resolve(tokenAddresses);
-      });
+      } catch (parseError) {
+        reject(parseError);
+      }
+    });
   });
 }
 
@@ -245,24 +309,88 @@ function extractWalletAddresses(filePath) {
   return new Promise((resolve, reject) => {
     const walletAddresses = [];
     
-    fs.createReadStream(filePath)
-      .pipe(parse({
-        columns: true,
-        skip_empty_lines: true
-      }))
-      .on('data', (row) => {
-        if (row.wallet_address) {
-          // Remove quotes from wallet address
-          const cleanAddress = row.wallet_address.replace(/"/g, '');
-          walletAddresses.push(cleanAddress);
+    // First read the file as text to handle special escape sequences
+    fs.readFile(filePath, 'utf8', (err, data) => {
+      if (err) {
+        return reject(err);
+      }
+      
+      try {
+        // Process the CSV file line by line
+        const lines = data.split('\n');
+        const header = lines[0].split(',');
+        const walletAddressIndex = header.findIndex(col => col.trim() === 'wallet_address');
+        
+        if (walletAddressIndex === -1) {
+          return reject(new Error('wallet_address column not found in CSV'));
         }
-      })
-      .on('error', (error) => {
-        reject(error);
-      })
-      .on('end', () => {
+        
+        // Process each line (skipping header)
+        for (let i = 1; i < lines.length; i++) {
+          try {
+            const line = lines[i].trim();
+            if (!line) continue;
+            
+            // Parse the line manually to handle special characters
+            let inQuotes = false;
+            let currentField = '';
+            let fieldIndex = 0;
+            
+            for (let j = 0; j < line.length; j++) {
+              const char = line[j];
+              const nextChar = line[j + 1];
+              
+              // Handle escape sequences
+              if (char === '\\' && nextChar === '"') {
+                currentField += '"';
+                j++; // Skip the next character (the quote)
+              }
+              // Start or end of quoted field
+              else if (char === '"') {
+                if (inQuotes && nextChar === '"') {
+                  // Double quotes inside a quoted field = escaped quote
+                  currentField += '"';
+                  j++; // Skip the next quote
+                } else {
+                  // Toggle quote state
+                  inQuotes = !inQuotes;
+                }
+              }
+              // Field separator
+              else if (char === ',' && !inQuotes) {
+                if (fieldIndex === walletAddressIndex) {
+                  // Remove surrounding quotes if any
+                  const cleanAddress = currentField.replace(/^"(.*)"$/, '$1');
+                  if (cleanAddress) {
+                    walletAddresses.push(cleanAddress);
+                  }
+                }
+                currentField = '';
+                fieldIndex++;
+              }
+              // Normal character
+              else {
+                currentField += char;
+              }
+            }
+            
+            // Handle the last field
+            if (fieldIndex === walletAddressIndex) {
+              const cleanAddress = currentField.replace(/^"(.*)"$/, '$1');
+              if (cleanAddress) {
+                walletAddresses.push(cleanAddress);
+              }
+            }
+          } catch (lineError) {
+            console.warn(`Warning: Could not process line ${i + 1}: ${lineError.message}`);
+          }
+        }
+        
         resolve(walletAddresses);
-      });
+      } catch (parseError) {
+        reject(parseError);
+      }
+    });
   });
 }
 
