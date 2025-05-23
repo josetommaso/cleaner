@@ -16,7 +16,7 @@ const rl = readline.createInterface({
 const baseDir = path.dirname(__filename);
 const tokensDir = path.join(baseDir, 'tokens');
 const walletsDir = path.join(baseDir, 'wallets');
-const csvFilePath = path.join(tokensDir, 'migrated_tokens_pump_24h.csv');
+const csvFilePath = path.join(tokensDir, 'tokens.csv');
 
 // Main function to handle command line options
 async function main() {
