@@ -16,6 +16,7 @@ const rl = readline.createInterface({
 const baseDir = path.dirname(__filename);
 const tokensDir = path.join(baseDir, 'tokens');
 const walletsDir = path.join(baseDir, 'wallets');
+const mergeDir = path.join(baseDir, 'merge');
 const csvFilePath = path.join(tokensDir, 'tokens.csv');
 
 // Main function to handle command line options
@@ -24,7 +25,7 @@ async function main() {
   const option = args[0]?.toLowerCase();
 
   if (!option) {
-    console.log('Please provide an option: "wallets" or "tokens"');
+    console.log('Please provide an option: "wallets", "tokens", or "merge"');
     rl.close();
     return;
   }
@@ -38,8 +39,12 @@ async function main() {
       console.log('Starting tokens option processing...');
       await processTokens();
       break;
+    case 'merge':
+      console.log('Starting CSV files merge process...');
+      await mergeCSVFiles();
+      break;
     default:
-      console.log('Invalid option. Please use "wallets" or "tokens"');
+      console.log('Invalid option. Please use "wallets", "tokens", or "merge"');
       rl.close();
   }
 }
@@ -392,6 +397,109 @@ function extractWalletAddresses(filePath) {
       }
     });
   });
+}
+
+// Merge CSV files from the merge directory
+async function mergeCSVFiles() {
+  try {
+    // Check if merge directory exists
+    if (!fs.existsSync(mergeDir)) {
+      console.error(`Error: Merge directory not found at ${mergeDir}`);
+      rl.close();
+      return;
+    }
+
+    // Get all CSV files in the merge directory
+    const csvFiles = fs.readdirSync(mergeDir)
+      .filter(file => file.toLowerCase().endsWith('.csv'));
+    
+    if (csvFiles.length === 0) {
+      console.error('No CSV files found in the merge directory.');
+      rl.close();
+      return;
+    }
+
+    console.log(`Found ${csvFiles.length} CSV files in the merge directory.`);
+    
+    let mergedData = [];
+    let headers = [];
+    let headerLine = '';
+    
+    // Process each CSV file
+    for (const csvFile of csvFiles) {
+      const csvFilePath = path.join(mergeDir, csvFile);
+      console.log(`Processing ${csvFile}...`);
+      
+      try {
+        // Read file content
+        const fileContent = fs.readFileSync(csvFilePath, 'utf8');
+        const lines = fileContent.split('\n');
+        
+        // If this is the first file, save the headers
+        if (headers.length === 0) {
+          headerLine = lines[0];
+          headers = lines[0].split(',');
+        }
+        
+        // Add data rows to the merged data (skip header if not the first file)
+        const startLine = mergedData.length === 0 ? 0 : 1;
+        for (let i = startLine; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (line) {
+            mergedData.push(line);
+          }
+        }
+      } catch (error) {
+        console.error(`Error processing ${csvFile}: ${error.message}`);
+      }
+    }
+    
+    if (mergedData.length === 0) {
+      console.log('No data found in any of the CSV files.');
+      rl.close();
+      return;
+    }
+    
+    // Prompt user for output file name
+    rl.question('Enter a name for the merged output file (without extension): ', (fileName) => {
+      if (!fileName) {
+        fileName = 'merged_data';
+      }
+      
+      // Ensure file has .csv extension
+      if (!fileName.endsWith('.csv')) {
+        fileName += '.csv';
+      }
+      
+      const outputPath = path.join(mergeDir, fileName);
+      
+      try {
+        // Write the merged data to the output file
+        fs.writeFileSync(outputPath, mergedData.join('\n'));
+        console.log(`Merged data successfully saved to ${outputPath}`);
+        
+        // Remove all source CSV files after successful processing
+        try {
+          for (const csvFile of csvFiles) {
+            const csvFilePath = path.join(mergeDir, csvFile);
+            fs.unlinkSync(csvFilePath);
+          }
+          console.log(`Removed ${csvFiles.length} source CSV files from the merge directory.`);
+        } catch (error) {
+          console.error(`Error removing CSV files: ${error.message}`);
+        }
+        
+        console.log('Merge process completed successfully.');
+      } catch (error) {
+        console.error(`Error writing to file: ${error.message}`);
+      }
+      
+      rl.close();
+    });
+  } catch (error) {
+    console.error(`Error merging CSV files: ${error.message}`);
+    rl.close();
+  }
 }
 
 // Execute main function
